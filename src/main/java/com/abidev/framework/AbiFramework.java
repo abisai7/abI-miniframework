@@ -72,7 +72,7 @@ public class AbiFramework {
                 if (method.isAnnotationPresent(Route.class)) {
                     Route r = method.getAnnotation(Route.class);
                     System.out.println("Registered route: " + r.value() + " -> " + method.getName());
-                    routes.put(r.value(), new RouteHandler(instance, method));
+                    routes.put(r.value(), new RouteHandler(instance, method, r.value()));
                 }
             }
         }
@@ -102,13 +102,32 @@ public class AbiFramework {
         }
     }
 
-    public String callRoute(String path) throws  Exception {
-        RouteHandler handler = routes.get(path);
-        if (handler == null) {
-            return "404 Not Found";
+    public String callRoute(String path) throws Exception {
+        for (var entry : routes.entrySet()) {
+            String pattern = entry.getKey();
+            RouteHandler handler = entry.getValue();
+
+            if (!handler.matches(path)) {
+                continue;
+            }
+
+            String[] pathParts = path.split("/");
+            String[] patternParts = pattern.split("/");
+
+            boolean fits = true;
+            for (int i = 0; i < patternParts.length; i++) {
+                if (!patternParts[i].startsWith("{") && !patternParts[i].equals(pathParts[i])) {
+                    fits = false;
+                    break;
+                }
+            }
+
+            if (fits) {
+                return (String) handler.invokeWithPath(path);
+            }
         }
 
-        return handler.invoke().toString();
+        return "404 Not Found";
     }
 
 }

@@ -16,6 +16,21 @@ public class HelloController {
         return messageService.getMessage();
     }
 
+    @Route("/hello/{name}")
+    public String greetByName(String name) {
+        return "Hello, " + name + "!";
+    }
+
+    @Route("/user/{id}")
+    public String getUserById(int id) {
+        return "User ID: " + id;
+    }
+
+    @Route("/user/{id}/profile")
+    public String getUserProfile(int id) {
+        return "Profile for user ID: " + id;
+    }
+
     @Route("/goodbye")
     public String sayGoodbye() {
         return "Goodbye, World!";

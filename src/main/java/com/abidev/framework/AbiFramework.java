@@ -18,6 +18,7 @@ public class AbiFramework {
     private Map<Class<?>, Object> singletons = new HashMap<>();
     private Set<Class<?>> prototypeBeans = new HashSet<>();
     private Set<Class<?>> componentClasses = new HashSet<>();
+    private final Map<Class<?>, Boolean> prototypeGraphCache = new HashMap<>();
 
     private Map<String, RouteHandler> routes = new HashMap<>();
 
@@ -104,11 +105,7 @@ public class AbiFramework {
         Object[] args = new Object[paramTypes.length];
         for (int i = 0; i < paramTypes.length; i++) {
             Class<?> paramType = paramTypes[i];
-            if (!componentClasses.contains(paramType)) {
-                args[i] = createNewObject(paramType);
-            } else {
-                args[i] = createInstance(paramType);
-            }
+            args[i] = createInstance(paramType);
         }
 
         Object instance = constructor.newInstance(args);
@@ -139,19 +136,6 @@ public class AbiFramework {
         return constructor;
     }
 
-    private Object createNewObject(Class<?> clazz) throws Exception {
-
-        Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
-        Class<?>[] paramTypes = constructor.getParameterTypes();
-        Object[] args = new Object[paramTypes.length];
-
-        for (int i = 0; i < paramTypes.length; i++) {
-            args[i] = createInstance(paramTypes[i]);
-        }
-
-        return constructor.newInstance(args);
-    }
-
     /**
      * Performs field injection for the given instance and class.
      * @param instance the object instance to inject dependencies into
@@ -175,17 +159,23 @@ public class AbiFramework {
     }
 
     private boolean hasPrototypeDependency(Class<?> clazz) {
+        return prototypeGraphCache.computeIfAbsent(clazz, this::scanPrototypeDeps);
+    }
+
+    private boolean scanPrototypeDeps(Class<?> clazz) {
         try {
             Constructor<?> constructor = chooseConstructor(clazz);
             for (Class<?> p : constructor.getParameterTypes()) {
-                if (prototypeBeans.contains(p)) return true;
+                if (prototypeBeans.contains(p)) {
+                    return true;
+                }
             }
             for (Field field : clazz.getDeclaredFields()) {
                 if (field.isAnnotationPresent(Inject.class) && prototypeBeans.contains(field.getType())) {
                     return true;
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return false;
         }
         return false;
@@ -251,6 +241,12 @@ public class AbiFramework {
         }
 
         return "404 Not Found";
+    }
+
+    private Object instantiatePlainObject(Class<?> clazz) throws Exception {
+        Constructor<?> constructor = chooseConstructor(clazz);
+        constructor.setAccessible(true);
+        return constructor.newInstance();
     }
 
     /**

@@ -17,7 +17,7 @@ public class Main {
         System.out.println(framework.callRoute("/unknown"));   // Output: 404 Not Found
 
         System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <timestamp>
-        Thread.sleep(2000);
+        Thread.sleep(1000);
         System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <different timestamp>
     }
 }

@@ -15,5 +15,9 @@ public class Main {
         System.out.println(framework.callRoute("/user/42"));  // Output: User ID: 42
         System.out.println(framework.callRoute("/user/42/profile")); // Output: Profile for user ID: 42
         System.out.println(framework.callRoute("/unknown"));   // Output: 404 Not Found
+
+        System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <timestamp>
+        Thread.sleep(2000);
+        System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <different timestamp>
     }
 }

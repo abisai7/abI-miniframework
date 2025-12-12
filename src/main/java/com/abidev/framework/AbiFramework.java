@@ -3,19 +3,25 @@ package com.abidev.framework;
 import com.abidev.annotations.Component;
 import com.abidev.annotations.Inject;
 import com.abidev.annotations.Route;
+import com.abidev.annotations.Scope;
 import com.abidev.helpers.RouteHandler;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Supplier;
 
 public class AbiFramework {
 
-    private Map<Class<?>, Object> components = new HashMap<>();
+    private Map<Class<?>, Object> singletons = new HashMap<>();
+    private Set<Class<?>> prototypeBeans = new HashSet<>();
+    private Set<Class<?>> componentClasses = new HashSet<>();
+
     private Map<String, RouteHandler> routes = new HashMap<>();
+
+
 
     public void scan(String packageName) throws Exception {
 
@@ -31,12 +37,24 @@ public class AbiFramework {
         // Recursively scan the directory for classes
         scanDirectory(folder, packageName);
 
-        // After scanning, perform dependency injection
-        // This is deprecated and will be removed in future versions.
-        injectDependencies();
+        // Create singleton instances
+        for (Class<?> clazz : new HashSet<>(componentClasses)) {
+            if (!prototypeBeans.contains(clazz) && !singletons.containsKey(clazz)) {
+                Object instance = createInstance(clazz);
+                singletons.put(clazz, instance);
+            }
+        }
 
         // Register routes after dependencies have been injected
         registerRoutes();
+
+        System.out.println("\n\n================= AbiFramework Scan Report ================");
+        System.out.println("\tScanned package: " + packageName);
+        System.out.println("\tFound components: " + componentClasses.size());
+        System.out.println("\tSingleton instances: " + singletons.size());
+        System.out.println("\tPrototype beans: " + prototypeBeans.size());
+        System.out.println("\tRegistered routes: " + routes.size());
+        System.out.println("============================================================\n\n");
     }
 
     private void scanDirectory(File dir, String currentPackage) throws Exception {
@@ -52,69 +70,156 @@ public class AbiFramework {
                 Class<?> clazz = Class.forName(className);
 
                 if (clazz.isAnnotationPresent(Component.class)) {
-                    Object instance = createInstance(clazz);
-                    components.put(clazz, instance);
+                    componentClasses.add(clazz);
+                    Scope scope = clazz.getAnnotation(Scope.class);
+
+                    if (scope == null || scope.value().equals(Scope.SINGLETON)) {
+                    } else if (scope.value().equals(Scope.PROTOTYPE)) {
+                        prototypeBeans.add(clazz);
+                    }
                 }
             }
         }
     }
 
     private Object createInstance(Class<?> clazz) throws Exception {
-        if (components.containsKey(clazz)) {
-            return components.get(clazz);
+        return createInstance(clazz, false);
+    }
+
+    private Object createInstance(Class<?> clazz, boolean forceNew) throws Exception {
+
+        // Prevent instantiation of interfaces and abstract classes, we don't manage them
+        if (clazz.isInterface() || java.lang.reflect.Modifier.isAbstract(clazz.getModifiers())) {
+            throw new RuntimeException("Cannot instantiate interface or abstract class: " + clazz.getName());
         }
+
+        // Check if the class is a singleton and already instantiated
+        if (!prototypeBeans.contains(clazz) && singletons.containsKey(clazz) && !forceNew) {
+            return singletons.get(clazz);
+        }
+
+        // Resolve constructor
+        Constructor<?> constructor = chooseConstructor(clazz);
+        Class<?>[] paramTypes = constructor.getParameterTypes();
+        Object[] args = new Object[paramTypes.length];
+        for (int i = 0; i < paramTypes.length; i++) {
+            Class<?> paramType = paramTypes[i];
+            if (!componentClasses.contains(paramType)) {
+                args[i] = createNewObject(paramType);
+            } else {
+                args[i] = createInstance(paramType);
+            }
+        }
+
+        Object instance = constructor.newInstance(args);
+
+        performFieldInjection(instance, clazz);
+
+        // If singleton, store the instance
+        if (!prototypeBeans.contains(clazz) && !forceNew) {
+            singletons.put(clazz, instance);
+        }
+
+        return instance;
+    }
+
+    private Constructor<?> chooseConstructor(Class<?> clazz) {
+        Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+
+        for (Constructor<?> c : constructors) {
+            if (c.getParameterCount() == 0) {
+                c.setAccessible(true);
+                return c;
+            }
+        }
+
+        // If no default constructor, return the first one
+        Constructor<?> constructor = constructors[0];
+        constructor.setAccessible(true);
+        return constructor;
+    }
+
+    private Object createNewObject(Class<?> clazz) throws Exception {
 
         Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
         Class<?>[] paramTypes = constructor.getParameterTypes();
-
         Object[] args = new Object[paramTypes.length];
+
         for (int i = 0; i < paramTypes.length; i++) {
             args[i] = createInstance(paramTypes[i]);
         }
 
-        Object instance = constructor.newInstance(args);
-        components.put(clazz, instance);
-        return instance;
+        return constructor.newInstance(args);
     }
 
-
-
     /**
-     * Registers routes by scanning methods of registered components for the @Route annotation.
+     * Performs field injection for the given instance and class.
+     * @param instance the object instance to inject dependencies into
+     * @param clazz the class of the object
+     * @throws IllegalAccessException if a field cannot be accessed
      */
-    private void registerRoutes() {
-        for (var entry : components.entrySet()) {
-            Object instance = entry.getValue();
-            for (var method : entry.getKey().getDeclaredMethods()) {
-
-                if (method.isAnnotationPresent(Route.class)) {
-                    Route r = method.getAnnotation(Route.class);
-                    System.out.println("Registered route: " + r.value() + " -> " + method.getName());
-                    routes.put(r.value(), new RouteHandler(instance, method, r.value()));
+    private void performFieldInjection(Object instance, Class<?> clazz) throws IllegalAccessException {
+        for (Field field : clazz.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Inject.class)) {
+                field.setAccessible(true);
+                Class<?> dependencyType = field.getType();
+                try {
+                    Object dependency = createInstance(dependencyType);
+                    field.set(instance, dependency);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to inject field " + field.getName()
+                            + " on " + clazz.getName() + " -> " + e.getMessage(), e);
                 }
             }
         }
     }
 
-    /**
-     * Injects dependencies into fields annotated with @Inject.
-     * @throws IllegalAccessException if a field cannot be accessed
-     */
-    private void injectDependencies() throws IllegalAccessException {
-        for (var entry : components.entrySet()) {
-            Object instance = entry.getValue();
-            Class<?> clazz = entry.getKey();
+    private boolean hasPrototypeDependency(Class<?> clazz) {
+        try {
+            Constructor<?> constructor = chooseConstructor(clazz);
+            for (Class<?> p : constructor.getParameterTypes()) {
+                if (prototypeBeans.contains(p)) return true;
+            }
             for (Field field : clazz.getDeclaredFields()) {
+                if (field.isAnnotationPresent(Inject.class) && prototypeBeans.contains(field.getType())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return false;
+    }
 
-                if (field.isAnnotationPresent(Inject.class)) {
-                    Class<?> dependencyType = field.getType();
-                    Object dependency = components.get(dependencyType);
-                    if (dependency == null) {
-                        throw  new RuntimeException("Unsatisfied dependency: " + dependencyType.getName());
-                    }
+    /**
+     * Registers routes by scanning methods of registered components for the @Route annotation.
+     */
+    private void registerRoutes() {
+        for (Class<?> clazz : componentClasses) {
+            for (var method : clazz.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(Route.class)) {
+                    Route route = method.getAnnotation(Route.class);
+                    String pattern = route.value();
 
-                    field.setAccessible(true);
-                    field.set(instance, dependency);
+                    final Supplier<Object> supplier = () -> {
+                        try {
+                            if (prototypeBeans.contains(clazz) || hasPrototypeDependency(clazz)) {
+                                return createInstance(clazz, true);
+                            } else {
+                                if (!singletons.containsKey(clazz)) {
+                                    Object instance = createInstance(clazz);
+                                    singletons.put(clazz, instance);
+                                }
+
+                                return singletons.get(clazz);
+                            }
+                        } catch (Exception e) {
+                            throw new RuntimeException("Failed to create instance for route: " + pattern);
+                        }
+                    };
+
+                    System.out.println("Registered route: " + pattern + " -> " + clazz.getSimpleName() + "." + method.getName());
+                    routes.put(pattern, new RouteHandler(supplier, method, pattern));
                 }
             }
         }
@@ -148,4 +253,22 @@ public class AbiFramework {
         return "404 Not Found";
     }
 
+    /**
+     * Retrieves a singleton instance of the specified class.
+     *
+     * @param clazz the class of the singleton to retrieve
+     * @return an Optional containing the singleton instance if it exists, or empty if not found
+     */
+    public Optional<Object> getSingleton(Class<?> clazz) {
+        return Optional.ofNullable(singletons.get(clazz));
+    }
+
+    /**
+     * Retrieves an unmodifiable set of all registered route patterns.
+     *
+     * @return a set of registered route patterns
+     */
+    public Set<String> getRoutes() {
+        return Collections.unmodifiableSet(routes.keySet());
+    }
 }

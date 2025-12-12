@@ -1,26 +1,39 @@
 package com.abidev.helpers;
 import java.lang.reflect.Method;
+import java.util.function.Supplier;
 
 /**
  * A helper class to encapsulate a route handler method and its instance.
  */
 public class RouteHandler {
-    private final Object instance;
+
+    private final Supplier<Object> instanceSupplier;
     private final Method method;
     private final String routePattern;
 
-    public RouteHandler(Object instance, Method method, String routePattern) {
-        this.instance = instance;
+    public RouteHandler(Supplier<Object> instanceSupplier, Method method, String routePattern) {
+        this.instanceSupplier = instanceSupplier;
         this.method = method;
         this.routePattern = routePattern;
+        this.method.setAccessible(true);
     }
 
     public boolean matches(String path) {
-        return path.split("/").length == routePattern.split("/").length;
-    }
+        String[] pathParts = normalize(path).split("/");
+        String[] patternParts = normalize(routePattern).split("/");
 
-    public Object invoke() throws Exception {
-        return method.invoke(instance);
+        if (pathParts.length != patternParts.length) {
+            return false;
+        }
+
+        for (int i = 0; i < patternParts.length; i++) {
+            if (patternParts[i].startsWith("{")) continue;
+            if (!patternParts[i].equals(pathParts[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -43,9 +56,11 @@ public class RouteHandler {
                 String value = pathParts[i];
                 Class<?> expectedType = paramTypes[argIndex];
                 args[argIndex] = convertToType(value, expectedType);
+                argIndex++;
             }
         }
 
+        Object instance = instanceSupplier.get();
         return method.invoke(instance, args);
     }
 
@@ -76,5 +91,15 @@ public class RouteHandler {
         throw new IllegalArgumentException("Unsupported parameter type: " + type.getName());
     }
 
+    private String normalize(String s) {
+        if (s == null || s.isBlank()) return "";
+        if (s.startsWith("/")) s = s.substring(1);
+        if (s.endsWith("/")) s = s.substring(0, s.length() - 1);
+        return s;
+    }
+
+    public String getPattern() {
+        return routePattern;
+    }
 
 }

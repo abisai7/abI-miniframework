@@ -1,17 +1,19 @@
 package com.abidev.controllers;
 
 import com.abidev.annotations.Component;
-import com.abidev.annotations.Inject;
 import com.abidev.annotations.Route;
 import com.abidev.services.MessageService;
+import com.abidev.services.RequestTimer;
 
 @Component
 public class HelloController {
 
-    private MessageService messageService;
+    private final MessageService messageService;
+    private final RequestTimer timer;
 
-    public HelloController(MessageService messageService) {
+    public HelloController(MessageService messageService, RequestTimer requestTimer) {
         this.messageService = messageService;
+        this.timer = requestTimer;
     }
 
     @Route("/hello")
@@ -37,5 +39,10 @@ public class HelloController {
     @Route("/goodbye")
     public String sayGoodbye() {
         return "Goodbye, World!";
+    }
+
+    @Route("/time")
+    public String getRequestTime() {
+        return "Request timestamp: " + timer.getTimestamp();
     }
 }

@@ -7,7 +7,7 @@ public class Main {
 
         AbiFramework framework = new AbiFramework();
 
-        framework.scan("com.abidev.controllers");
+        framework.scan("com.abidev");
 
         System.out.println(framework.callRoute("/hello"));    // Output: Hello, World!
         System.out.println(framework.callRoute("/goodbye"));  // Output: Goodbye, World!

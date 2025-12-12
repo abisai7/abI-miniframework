@@ -6,9 +6,8 @@ import com.abidev.annotations.Route;
 import com.abidev.helpers.RouteHandler;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,7 +17,7 @@ public class AbiFramework {
     private Map<Class<?>, Object> components = new HashMap<>();
     private Map<String, RouteHandler> routes = new HashMap<>();
 
-    public void scan(String packageName) throws URISyntaxException, ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public void scan(String packageName) throws Exception {
 
         String path = packageName.replace('.', '/');
         URL packageURL = Thread.currentThread().getContextClassLoader().getResource(path);
@@ -33,13 +32,14 @@ public class AbiFramework {
         scanDirectory(folder, packageName);
 
         // After scanning, perform dependency injection
+        // This is deprecated and will be removed in future versions.
         injectDependencies();
 
         // Register routes after dependencies have been injected
         registerRoutes();
     }
 
-    private void scanDirectory(File dir, String currentPackage) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    private void scanDirectory(File dir, String currentPackage) throws Exception {
         File[] files = dir.listFiles();
         if (files == null) return;
 
@@ -52,11 +52,29 @@ public class AbiFramework {
                 Class<?> clazz = Class.forName(className);
 
                 if (clazz.isAnnotationPresent(Component.class)) {
-                    Object instance = clazz.getDeclaredConstructor().newInstance();
+                    Object instance = createInstance(clazz);
                     components.put(clazz, instance);
                 }
             }
         }
+    }
+
+    private Object createInstance(Class<?> clazz) throws Exception {
+        if (components.containsKey(clazz)) {
+            return components.get(clazz);
+        }
+
+        Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+        Class<?>[] paramTypes = constructor.getParameterTypes();
+
+        Object[] args = new Object[paramTypes.length];
+        for (int i = 0; i < paramTypes.length; i++) {
+            args[i] = createInstance(paramTypes[i]);
+        }
+
+        Object instance = constructor.newInstance(args);
+        components.put(clazz, instance);
+        return instance;
     }
 
 

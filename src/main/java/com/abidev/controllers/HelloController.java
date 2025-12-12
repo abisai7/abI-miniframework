@@ -8,8 +8,11 @@ import com.abidev.services.MessageService;
 @Component
 public class HelloController {
 
-    @Inject
     private MessageService messageService;
+
+    public HelloController(MessageService messageService) {
+        this.messageService = messageService;
+    }
 
     @Route("/hello")
     public String sayHello() {

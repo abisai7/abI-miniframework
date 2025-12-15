@@ -2,6 +2,7 @@ package com.abidev.controllers;
 
 import com.abidev.annotations.Component;
 import com.abidev.annotations.PathVariable;
+import com.abidev.annotations.RequestParam;
 import com.abidev.annotations.Route;
 import com.abidev.services.MessageService;
 import com.abidev.services.RequestTimer;
@@ -50,5 +51,13 @@ public class HelloController {
     @Route("/admin")
     public String adminArea() {
         return "Welcome to the admin area!";
+    }
+
+    @Route("/search")
+    public String search(
+            @RequestParam("q") String query,
+            @RequestParam(defaultValue = "1") int page
+    ) {
+        return "Searching '" + query + "' page " + page;
     }
 }

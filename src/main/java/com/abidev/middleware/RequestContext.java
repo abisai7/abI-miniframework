@@ -9,12 +9,17 @@ public class RequestContext {
 
     private final String path;
     private final Map<String, String> pathVariables;
+    private final Map<String, String> queryParams;
     private final Map<String, Object> attributes = new HashMap<>();
     private final HttpExchange exchange;
 
-    public RequestContext(String path, Map<String, String> pathVariables, HttpExchange exchange) {
+    public RequestContext(String path,
+                          Map<String, String> pathVariables,
+                          Map<String, String> queryParams,
+                          HttpExchange exchange) {
         this.path = path;
         this.pathVariables = pathVariables;
+        this.queryParams = queryParams;
         this.exchange = exchange;
     }
 
@@ -24,6 +29,10 @@ public class RequestContext {
 
     public Map<String, String> getPathVariables() {
         return pathVariables;
+    }
+
+    public Map<String, String> getQueryParams() {
+        return queryParams;
     }
 
     public HttpExchange getExchange() {

@@ -1,5 +1,7 @@
 package com.abidev.helpers;
 import com.abidev.annotations.PathVariable;
+import com.abidev.annotations.RequestParam;
+import com.abidev.http.QueryParamsUtils;
 import com.abidev.middleware.RequestContext;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -119,6 +121,7 @@ public class RouteHandler {
 
         Map<String, String> variables = new HashMap<>();
 
+
         for (int i = 0; i < patternParts.length; i++) {
             String p = patternParts[i];
 
@@ -128,7 +131,9 @@ public class RouteHandler {
             }
         }
 
-        return new RequestContext(path, variables, exchange);
+        Map<String, String> queryParams = QueryParamsUtils.parse(exchange);
+
+        return new RequestContext(path, variables, queryParams, exchange);
     }
 
     /**
@@ -145,25 +150,82 @@ public class RouteHandler {
 
         for (int i = 0; i < paramTypes.length; i++) {
 
+            Class<?> paramType = paramTypes[i];
+            Annotation[] annotations = paramAnnotations[i];
+
+            boolean resolved = false;
+
             // 1️⃣ RequestContext
-            if (paramTypes[i] == RequestContext.class) {
+            if (paramType == RequestContext.class) {
                 args[i] = ctx;
                 continue;
             }
 
-            // 2️⃣ @PathVariable
-            for (Annotation a : paramAnnotations[i]) {
+            // 2️⃣ @PathVariable y @RequestParam
+            for (Annotation a : annotations) {
+
+                // ---- PATH VARIABLE ----
                 if (a instanceof PathVariable pv) {
 
-                    String raw = ctx.getPathVariables().get(pv.value());
-                    args[i] = convert(raw, paramTypes[i]);
+                    String name = pv.value();
+                    String raw = ctx.getPathVariables().get(name);
+
+                    if (raw == null) {
+                        throw new IllegalArgumentException(
+                                "Missing path variable: " + name
+                        );
+                    }
+
+                    args[i] = convert(raw, paramType);
+                    resolved = true;
                     break;
                 }
+
+                // ---- QUERY PARAM ----
+                if (a instanceof RequestParam rp) {
+
+                    String name = !rp.value().isEmpty()
+                            ? rp.value()
+                            : null;
+
+                    String raw = name != null
+                            ? ctx.getQueryParams().get(name)
+                            : null;
+
+                    if (raw == null || raw.isEmpty()) {
+
+                        if (!rp.defaultValue().isEmpty()) {
+                            raw = rp.defaultValue();
+                        } else if (rp.required()) {
+                            throw new IllegalArgumentException(
+                                    "Missing required query param: " + name
+                            );
+                        } else {
+                            args[i] = null;
+                            resolved = true;
+                            break;
+                        }
+                    }
+
+                    args[i] = convert(raw, paramType);
+                    resolved = true;
+                    break;
+                }
+            }
+
+            // 3️⃣ Not resolved -> error
+            if (!resolved) {
+                throw new IllegalArgumentException(
+                        "Cannot resolve parameter at index " + i +
+                                " of type " + paramType.getName() +
+                                " in method " + method.getName()
+                );
             }
         }
 
         return method.invoke(controller, args);
     }
+
 
     private Object convert(String value, Class<?> targetType) {
 

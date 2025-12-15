@@ -10,6 +10,7 @@ public class Main {
 
         framework.scan("com.abidev");
 
+        // Start HTTP server
         AbiHttpServer server = new AbiHttpServer(framework);
         server.start(8080);
 

@@ -1,6 +1,7 @@
 package com.abidev.helpers;
 import com.abidev.annotations.PathVariable;
 import com.abidev.middleware.RequestContext;
+import com.sun.net.httpserver.HttpExchange;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -111,7 +112,7 @@ public class RouteHandler {
     /**
      * Creates RequestContext extracting path variables.
      */
-    public RequestContext createContext(String path) {
+    public RequestContext createContext(String path, HttpExchange exchange) {
 
         String[] patternParts = routePattern.split("/");
         String[] pathParts = path.split("/");
@@ -127,7 +128,7 @@ public class RouteHandler {
             }
         }
 
-        return new RequestContext(path, variables);
+        return new RequestContext(path, variables, exchange);
     }
 
     /**

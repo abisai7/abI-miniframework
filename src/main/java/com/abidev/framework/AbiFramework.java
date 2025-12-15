@@ -7,6 +7,7 @@ import com.abidev.annotations.Scope;
 import com.abidev.helpers.RouteHandler;
 import com.abidev.middleware.HandlerInterceptor;
 import com.abidev.middleware.RequestContext;
+import com.sun.net.httpserver.HttpExchange;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
@@ -233,7 +234,7 @@ public class AbiFramework {
         }
     }
 
-    public String callRoute(String path) throws Exception {
+    public String callRoute(String path, HttpExchange exchange) throws Exception {
 
         for (var entry : routes.entrySet()) {
 
@@ -243,7 +244,7 @@ public class AbiFramework {
                 continue;
             }
 
-            RequestContext ctx = handler.createContext(path);
+            RequestContext ctx = handler.createContext(path, exchange);
 
             // ===== PRE HANDLE =====
             for (HandlerInterceptor interceptor : interceptors) {

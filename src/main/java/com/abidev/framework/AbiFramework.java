@@ -5,10 +5,13 @@ import com.abidev.annotations.Inject;
 import com.abidev.annotations.Route;
 import com.abidev.annotations.Scope;
 import com.abidev.helpers.RouteHandler;
+import com.abidev.middleware.HandlerInterceptor;
+import com.abidev.middleware.RequestContext;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Supplier;
@@ -21,6 +24,8 @@ public class AbiFramework {
     private final Map<Class<?>, Boolean> prototypeGraphCache = new HashMap<>();
 
     private Map<String, RouteHandler> routes = new HashMap<>();
+    private final List<HandlerInterceptor> interceptors = new ArrayList<>();
+
 
 
 
@@ -55,6 +60,7 @@ public class AbiFramework {
         System.out.println("\tSingleton instances: " + singletons.size());
         System.out.println("\tPrototype beans: " + prototypeBeans.size());
         System.out.println("\tRegistered routes: " + routes.size());
+        System.out.println("\tRegistered interceptors: " + interceptors.size());
         System.out.println("============================================================\n\n");
     }
 
@@ -75,9 +81,21 @@ public class AbiFramework {
                     Scope scope = clazz.getAnnotation(Scope.class);
 
                     if (scope == null || scope.value().equals(Scope.SINGLETON)) {
+                        // Only singleton by default
+                        // Handled later in the scan method
                     } else if (scope.value().equals(Scope.PROTOTYPE)) {
                         prototypeBeans.add(clazz);
                     }
+                }
+
+                if (HandlerInterceptor.class.isAssignableFrom(clazz)
+                        && !clazz.isInterface()
+                        && !Modifier.isAbstract(clazz.getModifiers())) {
+
+                    HandlerInterceptor interceptor =
+                            (HandlerInterceptor) createInstance(clazz);
+
+                    interceptors.add(interceptor);
                 }
             }
         }
@@ -216,28 +234,52 @@ public class AbiFramework {
     }
 
     public String callRoute(String path) throws Exception {
+
         for (var entry : routes.entrySet()) {
-            String pattern = entry.getKey();
+
             RouteHandler handler = entry.getValue();
 
             if (!handler.matches(path)) {
                 continue;
             }
 
-            String[] pathParts = path.split("/");
-            String[] patternParts = pattern.split("/");
+            RequestContext ctx = handler.createContext(path);
 
-            boolean fits = true;
-            for (int i = 0; i < patternParts.length; i++) {
-                if (!patternParts[i].startsWith("{") && !patternParts[i].equals(pathParts[i])) {
-                    fits = false;
-                    break;
+            // ===== PRE HANDLE =====
+            for (HandlerInterceptor interceptor : interceptors) {
+                if (!interceptor.preHandle(ctx)) {
+                    return "403 Forbidden";
                 }
             }
 
-            if (fits) {
-                return (String) handler.invokeWithPath(path);
+            Object result = null;
+            Exception error = null;
+
+            try {
+                // ===== CONTROLLER =====
+                result = handler.invoke(ctx);
+
+            } catch (Exception ex) {
+                error = ex;
             }
+
+            // ===== POST HANDLE =====
+            if (error == null) {
+                for (HandlerInterceptor interceptor : interceptors) {
+                    interceptor.postHandle(ctx, result);
+                }
+            }
+
+            // ===== AFTER COMPLETION =====
+            for (HandlerInterceptor interceptor : interceptors) {
+                interceptor.afterCompletion(ctx, error);
+            }
+
+            if (error != null) {
+                throw error;
+            }
+
+            return (String) result;
         }
 
         return "404 Not Found";
@@ -266,5 +308,9 @@ public class AbiFramework {
      */
     public Set<String> getRoutes() {
         return Collections.unmodifiableSet(routes.keySet());
+    }
+
+    public void addInterceptor(HandlerInterceptor interceptor) {
+        interceptors.add(interceptor);
     }
 }

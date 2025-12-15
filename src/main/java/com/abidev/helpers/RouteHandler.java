@@ -1,5 +1,11 @@
 package com.abidev.helpers;
+import com.abidev.annotations.PathVariable;
+import com.abidev.middleware.RequestContext;
+
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -100,6 +106,84 @@ public class RouteHandler {
 
     public String getPattern() {
         return routePattern;
+    }
+
+    /**
+     * Creates RequestContext extracting path variables.
+     */
+    public RequestContext createContext(String path) {
+
+        String[] patternParts = routePattern.split("/");
+        String[] pathParts = path.split("/");
+
+        Map<String, String> variables = new HashMap<>();
+
+        for (int i = 0; i < patternParts.length; i++) {
+            String p = patternParts[i];
+
+            if (p.startsWith("{") && p.endsWith("}")) {
+                String varName = p.substring(1, p.length() - 1);
+                variables.put(varName, pathParts[i]);
+            }
+        }
+
+        return new RequestContext(path, variables);
+    }
+
+    /**
+     * Invokes the controller method.
+     */
+    public Object invoke(RequestContext ctx) throws Exception {
+
+        Object controller = instanceSupplier.get();
+
+        Class<?>[] paramTypes = method.getParameterTypes();
+        Annotation[][] paramAnnotations = method.getParameterAnnotations();
+
+        Object[] args = new Object[paramTypes.length];
+
+        for (int i = 0; i < paramTypes.length; i++) {
+
+            // 1️⃣ RequestContext
+            if (paramTypes[i] == RequestContext.class) {
+                args[i] = ctx;
+                continue;
+            }
+
+            // 2️⃣ @PathVariable
+            for (Annotation a : paramAnnotations[i]) {
+                if (a instanceof PathVariable pv) {
+
+                    String raw = ctx.getPathVariables().get(pv.value());
+                    args[i] = convert(raw, paramTypes[i]);
+                    break;
+                }
+            }
+        }
+
+        return method.invoke(controller, args);
+    }
+
+    private Object convert(String value, Class<?> targetType) {
+
+        if (value == null) {
+            return null;
+        }
+
+        if (targetType == String.class) {
+            return value;
+        }
+        if (targetType == int.class || targetType == Integer.class) {
+            return Integer.parseInt(value);
+        }
+        if (targetType == long.class || targetType == Long.class) {
+            return Long.parseLong(value);
+        }
+        if (targetType == boolean.class || targetType == Boolean.class) {
+            return Boolean.parseBoolean(value);
+        }
+
+        throw new RuntimeException("Unsupported parameter type: " + targetType.getName());
     }
 
 }

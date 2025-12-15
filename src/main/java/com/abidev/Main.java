@@ -19,5 +19,7 @@ public class Main {
         System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <timestamp>
         Thread.sleep(1000);
         System.out.println(framework.callRoute("/time")); // Output: Request timestamp: <different timestamp>
+
+        System.out.println(framework.callRoute("/admin")); // Output: 403 Forbidden!
     }
 }

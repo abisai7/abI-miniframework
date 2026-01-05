@@ -64,40 +64,13 @@ public class RouteHandler {
             if (patternParts[i].startsWith("{")) {
                 String value = pathParts[i];
                 Class<?> expectedType = paramTypes[argIndex];
-                args[argIndex] = convertToType(value, expectedType);
+                args[argIndex] = convert(value, expectedType);
                 argIndex++;
             }
         }
 
         Object instance = instanceSupplier.get();
         return method.invoke(instance, args);
-    }
-
-    /**
-     * Converts a string value to the specified type.
-     *
-     * @param value the string value to convert
-     * @param type  the target type class
-     * @return the converted object
-     */
-    private Object convertToType(String value, Class<?> type) {
-        if (type == String.class) {
-            return value;
-        }
-
-        if (type == int.class || type == Integer.class) {
-            return Integer.parseInt(value);
-        }
-
-        if (type == long.class || type == Long.class) {
-            return Long.parseLong(value);
-        }
-
-        if (type == boolean.class || type == Boolean.class) {
-            return Boolean.parseBoolean(value);
-        }
-
-        throw new IllegalArgumentException("Unsupported parameter type: " + type.getName());
     }
 
     private String normalize(String s) {

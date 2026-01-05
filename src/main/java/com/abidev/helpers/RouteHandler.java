@@ -1,6 +1,7 @@
 package com.abidev.helpers;
 import com.abidev.annotations.PathVariable;
 import com.abidev.annotations.RequestBody;
+import com.abidev.annotations.RequestHeader;
 import com.abidev.annotations.RequestParam;
 import com.abidev.http.QueryParamsUtils;
 import com.abidev.middleware.RequestContext;
@@ -114,7 +115,14 @@ public class RouteHandler {
             e.printStackTrace();
         }
 
-        return new RequestContext(body, path, variables, queryParams, exchange);
+        Map<String, String> headers = new HashMap<>();
+        exchange.getRequestHeaders().forEach((key, values) -> {
+            if (!values.isEmpty()) {
+                headers.put(key.toLowerCase(), values.get(0));
+            }
+        });
+
+        return new RequestContext(body, path, variables, queryParams, headers, exchange);
     }
 
     /**
@@ -201,6 +209,32 @@ public class RouteHandler {
                     }
 
                     args[i] = BodyConverter.convert(body, paramType);
+                    resolved = true;
+                    break;
+                }
+
+                // HEADERS
+                if (a instanceof RequestHeader rh) {
+
+                    String name = rh.value().toLowerCase();
+                    String raw = ctx.getHeaders().get(name);
+
+                    if (raw == null || raw.isEmpty()) {
+
+                        if (!rh.defaultValue().isEmpty()) {
+                            raw = rh.defaultValue();
+                        } else if (rh.required()) {
+                            throw new IllegalArgumentException(
+                                    "Missing required header: " + name
+                            );
+                        } else {
+                            args[i] = null;
+                            resolved = true;
+                            break;
+                        }
+                    }
+
+                    args[i] = convert(raw, paramType);
                     resolved = true;
                     break;
                 }

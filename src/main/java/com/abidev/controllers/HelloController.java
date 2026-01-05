@@ -63,5 +63,13 @@ public class HelloController {
         return "Searching '" + query + "' page " + page;
     }
 
+    @Route("/debug")
+    public String debug(
+            @RequestHeader("User-Agent") String ua,
+            @RequestHeader(value = "X-Debug", required = false, defaultValue = "false") boolean debug
+    ) {
+        return "UA=" + ua + ", debug=" + debug;
+    }
+
     public record UserRequest(String name, int age) {}
 }

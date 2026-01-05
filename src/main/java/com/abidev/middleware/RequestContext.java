@@ -13,15 +13,18 @@ public class RequestContext {
     private final Map<String, String> queryParams;
     private final Map<String, Object> attributes = new HashMap<>();
     private final HttpExchange exchange;
+    private final Map<String, String> headers;
 
     public RequestContext(String body, String path,
                           Map<String, String> pathVariables,
                           Map<String, String> queryParams,
+                          Map<String, String> headers,
                           HttpExchange exchange) {
         this.body = body;
         this.path = path;
         this.pathVariables = pathVariables;
         this.queryParams = queryParams;
+        this.headers = headers;
         this.exchange = exchange;
     }
 
@@ -51,5 +54,9 @@ public class RequestContext {
 
     public Object getAttribute(String key) {
         return attributes.get(key);
+    }
+
+    public Map<String, String> getHeaders() {
+        return headers;
     }
 }

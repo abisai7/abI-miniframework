@@ -1,5 +1,6 @@
 package com.abidev.helpers;
 import com.abidev.annotations.PathVariable;
+import com.abidev.annotations.RequestBody;
 import com.abidev.annotations.RequestParam;
 import com.abidev.http.QueryParamsUtils;
 import com.abidev.middleware.RequestContext;
@@ -106,7 +107,14 @@ public class RouteHandler {
 
         Map<String, String> queryParams = QueryParamsUtils.parse(exchange);
 
-        return new RequestContext(path, variables, queryParams, exchange);
+        String body = null;
+        try {
+            body = new String(exchange.getRequestBody().readAllBytes());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return new RequestContext(body, path, variables, queryParams, exchange);
     }
 
     /**
@@ -181,6 +189,18 @@ public class RouteHandler {
                     }
 
                     args[i] = convert(raw, paramType);
+                    resolved = true;
+                    break;
+                }
+
+                // --- BODY ---
+                if (a instanceof RequestBody rb) {
+                    String body = ctx.getBody();
+                    if ((body == null || body.isBlank()) && rb.required()) {
+                        throw new IllegalArgumentException("Missing required request body");
+                    }
+
+                    args[i] = BodyConverter.convert(body, paramType);
                     resolved = true;
                     break;
                 }

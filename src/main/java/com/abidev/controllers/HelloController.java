@@ -1,9 +1,6 @@
 package com.abidev.controllers;
 
-import com.abidev.annotations.Component;
-import com.abidev.annotations.PathVariable;
-import com.abidev.annotations.RequestParam;
-import com.abidev.annotations.Route;
+import com.abidev.annotations.*;
 import com.abidev.services.MessageService;
 import com.abidev.services.RequestTimer;
 
@@ -38,6 +35,11 @@ public class HelloController {
         return "Profile for user ID: " + id;
     }
 
+    @Route("/user/create")
+    public String create(@RequestBody UserRequest body){
+        return "Created user: " + body.name() + ", age " + body.age();
+    }
+
     @Route("/goodbye")
     public String sayGoodbye() {
         return "Goodbye, World!";
@@ -60,4 +62,6 @@ public class HelloController {
     ) {
         return "Searching '" + query + "' page " + page;
     }
+
+    public record UserRequest(String name, int age) {}
 }

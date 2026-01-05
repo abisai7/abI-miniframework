@@ -4,6 +4,7 @@ import com.abidev.framework.AbiFramework;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 
 public class AbiHttpServer {
 
@@ -20,7 +21,7 @@ public class AbiHttpServer {
            String path = exchange.getRequestURI().getPath();
            String method = exchange.getRequestMethod();
 
-           if (!method.equalsIgnoreCase("GET")) {
+           if (!Arrays.asList("GET", "POST").contains(method)) {
                exchange.sendResponseHeaders(405, -1); // Method Not Allowed
                return;
            }

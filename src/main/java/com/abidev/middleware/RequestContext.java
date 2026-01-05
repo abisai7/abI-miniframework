@@ -7,20 +7,26 @@ import java.util.Map;
 
 public class RequestContext {
 
+    private final String body;
     private final String path;
     private final Map<String, String> pathVariables;
     private final Map<String, String> queryParams;
     private final Map<String, Object> attributes = new HashMap<>();
     private final HttpExchange exchange;
 
-    public RequestContext(String path,
+    public RequestContext(String body, String path,
                           Map<String, String> pathVariables,
                           Map<String, String> queryParams,
                           HttpExchange exchange) {
+        this.body = body;
         this.path = path;
         this.pathVariables = pathVariables;
         this.queryParams = queryParams;
         this.exchange = exchange;
+    }
+
+    public String getBody() {
+        return body;
     }
 
     public String getPath() {

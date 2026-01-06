@@ -1,9 +1,8 @@
 package com.abidev.helpers;
-import com.abidev.annotations.PathVariable;
-import com.abidev.annotations.RequestBody;
-import com.abidev.annotations.RequestHeader;
-import com.abidev.annotations.RequestParam;
+import com.abidev.annotations.*;
+import com.abidev.http.HandlerResult;
 import com.abidev.http.QueryParamsUtils;
+import com.abidev.http.ResponseEntity;
 import com.abidev.middleware.RequestContext;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -126,9 +125,9 @@ public class RouteHandler {
     }
 
     /**
-     * Invokes the controller method.
+     * Invokes the controller method and normalizes the result into a HandlerResult.
      */
-    public Object invoke(RequestContext ctx) throws Exception {
+    public HandlerResult invoke(RequestContext ctx) throws Exception {
 
         Object controller = instanceSupplier.get();
 
@@ -137,6 +136,9 @@ public class RouteHandler {
 
         Object[] args = new Object[paramTypes.length];
 
+        // =============================
+        // 1️⃣ Resolve method parameters
+        // =============================
         for (int i = 0; i < paramTypes.length; i++) {
 
             Class<?> paramType = paramTypes[i];
@@ -144,16 +146,16 @@ public class RouteHandler {
 
             boolean resolved = false;
 
-            // 1️⃣ RequestContext
+            // ---- RequestContext ----
             if (paramType == RequestContext.class) {
                 args[i] = ctx;
+                resolved = true;
                 continue;
             }
 
-            // 2️⃣ @PathVariable y @RequestParam
             for (Annotation a : annotations) {
 
-                // ---- PATH VARIABLE ----
+                // ---- @PathVariable ----
                 if (a instanceof PathVariable pv) {
 
                     String name = pv.value();
@@ -170,13 +172,10 @@ public class RouteHandler {
                     break;
                 }
 
-                // ---- QUERY PARAM ----
+                // ---- @RequestParam ----
                 if (a instanceof RequestParam rp) {
 
-                    String name = !rp.value().isEmpty()
-                            ? rp.value()
-                            : null;
-
+                    String name = !rp.value().isEmpty() ? rp.value() : null;
                     String raw = name != null
                             ? ctx.getQueryParams().get(name)
                             : null;
@@ -201,11 +200,15 @@ public class RouteHandler {
                     break;
                 }
 
-                // --- BODY ---
+                // ---- @RequestBody ----
                 if (a instanceof RequestBody rb) {
+
                     String body = ctx.getBody();
+
                     if ((body == null || body.isBlank()) && rb.required()) {
-                        throw new IllegalArgumentException("Missing required request body");
+                        throw new IllegalArgumentException(
+                                "Missing required request body for parameter " + i
+                        );
                     }
 
                     args[i] = BodyConverter.convert(body, paramType);
@@ -213,7 +216,7 @@ public class RouteHandler {
                     break;
                 }
 
-                // HEADERS
+                // ---- @RequestHeader ----
                 if (a instanceof RequestHeader rh) {
 
                     String name = rh.value().toLowerCase();
@@ -225,7 +228,7 @@ public class RouteHandler {
                             raw = rh.defaultValue();
                         } else if (rh.required()) {
                             throw new IllegalArgumentException(
-                                    "Missing required header: " + name
+                                    "Missing required header: " + rh.value()
                             );
                         } else {
                             args[i] = null;
@@ -240,18 +243,46 @@ public class RouteHandler {
                 }
             }
 
-            // 3️⃣ Not resolved -> error
             if (!resolved) {
                 throw new IllegalArgumentException(
                         "Cannot resolve parameter at index " + i +
                                 " of type " + paramType.getName() +
-                                " in method " + method.getName()
+                                " in method " +
+                                method.getDeclaringClass().getSimpleName() +
+                                "." + method.getName()
                 );
             }
         }
 
-        return method.invoke(controller, args);
+        // ============================
+        // 2️⃣ Invoke controller method
+        // ============================
+        method.setAccessible(true);
+        Object result = method.invoke(controller, args);
+
+        // =========================
+        // 3️⃣ Normalize the response
+        // =========================
+
+        // ---- ResponseEntity ----
+        if (result instanceof ResponseEntity<?> re) {
+            return new HandlerResult(
+                    re.getStatus(),
+                    re.getHeaders(),
+                    re.getBody()
+            );
+        }
+
+        // ---- @ResponseStatus ----
+        if (method.isAnnotationPresent(ResponseStatus.class)) {
+            int status = method.getAnnotation(ResponseStatus.class).value();
+            return new HandlerResult(status, Map.of(), result);
+        }
+
+        // ---- Default 200 OK ----
+        return new HandlerResult(200, Map.of(), result);
     }
+
 
 
     private Object convert(String value, Class<?> targetType) {

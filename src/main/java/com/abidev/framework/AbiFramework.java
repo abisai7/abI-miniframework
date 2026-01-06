@@ -5,6 +5,7 @@ import com.abidev.annotations.Inject;
 import com.abidev.annotations.Route;
 import com.abidev.annotations.Scope;
 import com.abidev.helpers.RouteHandler;
+import com.abidev.http.HandlerResult;
 import com.abidev.middleware.HandlerInterceptor;
 import com.abidev.middleware.RequestContext;
 import com.sun.net.httpserver.HttpExchange;
@@ -234,7 +235,7 @@ public class AbiFramework {
         }
     }
 
-    public String callRoute(String path, HttpExchange exchange) throws Exception {
+    public HandlerResult callRoute(String path, HttpExchange exchange) throws Exception {
 
         for (var entry : routes.entrySet()) {
 
@@ -246,32 +247,44 @@ public class AbiFramework {
 
             RequestContext ctx = handler.createContext(path, exchange);
 
-            // ===== PRE HANDLE =====
+            // =========================
+            // PRE HANDLE
+            // =========================
             for (HandlerInterceptor interceptor : interceptors) {
                 if (!interceptor.preHandle(ctx)) {
-                    return "403 Forbidden";
+                    return new HandlerResult(
+                            403,
+                            Map.of(),
+                            "Forbidden"
+                    );
                 }
             }
 
-            Object result = null;
+            HandlerResult result = null;
             Exception error = null;
 
             try {
-                // ===== CONTROLLER =====
+                // =========================
+                // CONTROLLER
+                // =========================
                 result = handler.invoke(ctx);
 
             } catch (Exception ex) {
                 error = ex;
             }
 
-            // ===== POST HANDLE =====
+            // =========================
+            // POST HANDLE
+            // =========================
             if (error == null) {
                 for (HandlerInterceptor interceptor : interceptors) {
                     interceptor.postHandle(ctx, result);
                 }
             }
 
-            // ===== AFTER COMPLETION =====
+            // =========================
+            // AFTER COMPLETION
+            // =========================
             for (HandlerInterceptor interceptor : interceptors) {
                 interceptor.afterCompletion(ctx, error);
             }
@@ -280,10 +293,17 @@ public class AbiFramework {
                 throw error;
             }
 
-            return (String) result;
+            return result;
         }
 
-        return "404 Not Found";
+        // =========================
+        // NO ROUTE MATCHED
+        // =========================
+        return new HandlerResult(
+                404,
+                Map.of(),
+                "Not Found"
+        );
     }
 
     private Object instantiatePlainObject(Class<?> clazz) throws Exception {

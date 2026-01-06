@@ -1,6 +1,7 @@
 package com.abidev.controllers;
 
 import com.abidev.annotations.*;
+import com.abidev.http.ResponseEntity;
 import com.abidev.services.MessageService;
 import com.abidev.services.RequestTimer;
 
@@ -36,8 +37,13 @@ public class HelloController {
     }
 
     @Route("/user/create")
-    public String create(@RequestBody UserRequest body){
-        return "Created user: " + body.name() + ", age " + body.age();
+    public ResponseEntity<UserResponse> create(@RequestBody UserRequest body){
+        UserResponse response = new UserResponse(
+                "success",
+                "User created successfully",
+                body
+        );
+        return ResponseEntity.ok(response);
     }
 
     @Route("/goodbye")
@@ -71,5 +77,15 @@ public class HelloController {
         return "UA=" + ua + ", debug=" + debug;
     }
 
+    @Route("/created")
+    public ResponseEntity<Object> created() {
+        return ResponseEntity
+                .status(201)
+                .header("X-App", "Abi")
+                .body("Created");
+    }
+
     public record UserRequest(String name, int age) {}
+
+    public record UserResponse(String status, String message, UserRequest user) {}
 }

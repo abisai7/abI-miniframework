@@ -1,19 +1,15 @@
 package com.abidev.framework;
 
-import com.abidev.annotations.Component;
-import com.abidev.annotations.Inject;
-import com.abidev.annotations.Route;
-import com.abidev.annotations.Scope;
+import com.abidev.annotations.*;
 import com.abidev.helpers.RouteHandler;
 import com.abidev.http.HandlerResult;
+import com.abidev.http.ResponseEntity;
 import com.abidev.middleware.HandlerInterceptor;
 import com.abidev.middleware.RequestContext;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.File;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Supplier;
@@ -28,6 +24,7 @@ public class AbiFramework {
     private Map<String, RouteHandler> routes = new HashMap<>();
     private final List<HandlerInterceptor> interceptors = new ArrayList<>();
 
+    private final List<ExceptionHandlerMethod> exceptionHandlers = new ArrayList<>();
 
 
 
@@ -63,6 +60,7 @@ public class AbiFramework {
         System.out.println("\tPrototype beans: " + prototypeBeans.size());
         System.out.println("\tRegistered routes: " + routes.size());
         System.out.println("\tRegistered interceptors: " + interceptors.size());
+        System.out.println("\tRegistered exception handlers: " + exceptionHandlers.size());
         System.out.println("============================================================\n\n");
     }
 
@@ -87,6 +85,19 @@ public class AbiFramework {
                         // Handled later in the scan method
                     } else if (scope.value().equals(Scope.PROTOTYPE)) {
                         prototypeBeans.add(clazz);
+                    }
+                }
+
+                if (clazz.isAnnotationPresent(ControllerAdvice.class)) {
+                    Object instance = createInstance(clazz);
+
+                    for (Method method : clazz.getDeclaredMethods()) {
+                        if (method.isAnnotationPresent(ExceptionHandler.class)) {
+                            ExceptionHandler eh = method.getAnnotation(ExceptionHandler.class);
+                            exceptionHandlers.add(new ExceptionHandlerMethod(
+                                    instance, method, List.of(eh.value()))
+                            );
+                        }
                     }
                 }
 
@@ -270,7 +281,12 @@ public class AbiFramework {
                 result = handler.invoke(ctx);
 
             } catch (Exception ex) {
-                error = ex;
+                if (ex instanceof InvocationTargetException ite
+                        && ite.getCause() instanceof Exception cause) {
+                    error = cause;
+                } else {
+                    error = ex;
+                }
             }
 
             // =========================
@@ -290,7 +306,7 @@ public class AbiFramework {
             }
 
             if (error != null) {
-                throw error;
+                return resolveException(error);
             }
 
             return result;
@@ -304,6 +320,60 @@ public class AbiFramework {
                 Map.of(),
                 "Not Found"
         );
+    }
+
+    private HandlerResult resolveException(Exception ex) throws Exception {
+
+        ExceptionHandlerMethod bestMatch = null;
+        int bestDepth = Integer.MAX_VALUE;
+
+        for (ExceptionHandlerMethod handler : exceptionHandlers) {
+
+            for (Class<? extends Throwable> type : handler.getHandledExceptions()) {
+
+                if (type.isAssignableFrom(ex.getClass())) {
+
+                    int depth = getExceptionDepth(type, ex.getClass());
+
+                    if (depth < bestDepth) {
+                        bestDepth = depth;
+                        bestMatch = handler;
+                    }
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+
+            Object result = bestMatch.invoke(ex);
+
+            if (result instanceof ResponseEntity<?> re) {
+                return new HandlerResult(
+                        re.getStatus(),
+                        re.getHeaders(),
+                        re.getBody()
+                );
+            }
+
+            return new HandlerResult(500, Map.of(), result);
+        }
+
+        throw ex;
+    }
+
+    private int getExceptionDepth(Class<?> handlerType, Class<?> thrownType) {
+        int depth = 0;
+        Class<?> current = thrownType;
+
+        while (current != null) {
+            if (current.equals(handlerType)) {
+                return depth;
+            }
+            current = current.getSuperclass();
+            depth++;
+        }
+
+        return Integer.MAX_VALUE;
     }
 
     private Object instantiatePlainObject(Class<?> clazz) throws Exception {

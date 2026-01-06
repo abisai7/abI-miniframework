@@ -85,6 +85,14 @@ public class HelloController {
                 .body("Created");
     }
 
+    @Route("/error")
+    public ResponseEntity<String> error() {
+        if (true) {
+            throw new IllegalArgumentException("Invalid argument provided");
+        }
+        return ResponseEntity.ok("This will never be reached");
+    }
+
     public record UserRequest(String name, int age) {}
 
     public record UserResponse(String status, String message, UserRequest user) {}

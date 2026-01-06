@@ -324,42 +324,49 @@ public class AbiFramework {
 
     private HandlerResult resolveException(Exception ex) throws Exception {
 
-        ExceptionHandlerMethod bestMatch = null;
-        int bestDepth = Integer.MAX_VALUE;
+        // 🔥 Unwrap InvocationTargetException
+        Throwable actual = ex;
+        if (ex instanceof InvocationTargetException ite && ite.getCause() != null) {
+            actual = ite.getCause();
+        }
 
+        // 1️⃣ @ExceptionHandler has priority
         for (ExceptionHandlerMethod handler : exceptionHandlers) {
 
-            for (Class<? extends Throwable> type : handler.getHandledExceptions()) {
+            if (handler.supports(actual)) {
 
-                if (type.isAssignableFrom(ex.getClass())) {
+                Object result = handler.invoke(actual);
 
-                    int depth = getExceptionDepth(type, ex.getClass());
-
-                    if (depth < bestDepth) {
-                        bestDepth = depth;
-                        bestMatch = handler;
-                    }
+                if (result instanceof ResponseEntity<?> re) {
+                    return new HandlerResult(
+                            re.getStatus(),
+                            re.getHeaders(),
+                            re.getBody()
+                    );
                 }
+
+                return new HandlerResult(500, Map.of(), result);
             }
         }
 
-        if (bestMatch != null) {
+        // 2️⃣ Automatic mapping
+        if (actual instanceof Exception actualEx) {
 
-            Object result = bestMatch.invoke(ex);
+            int status = DefaultExceptionResolver.resolveStatus(actualEx);
 
-            if (result instanceof ResponseEntity<?> re) {
-                return new HandlerResult(
-                        re.getStatus(),
-                        re.getHeaders(),
-                        re.getBody()
-                );
-            }
-
-            return new HandlerResult(500, Map.of(), result);
+            return new HandlerResult(
+                    status,
+                    Map.of(),
+                    actualEx.getMessage() != null
+                            ? actualEx.getMessage()
+                            : status + " Error"
+            );
         }
 
-        throw ex;
+        // 3️⃣ Throwable --> Critical failure
+        throw new RuntimeException(actual);
     }
+
 
     private int getExceptionDepth(Class<?> handlerType, Class<?> thrownType) {
         int depth = 0;

@@ -1,6 +1,7 @@
 package com.abidev.controllers;
 
 import com.abidev.annotations.*;
+import com.abidev.controllers.exception.UserNotFoundException;
 import com.abidev.http.ResponseEntity;
 import com.abidev.services.MessageService;
 import com.abidev.services.RequestTimer;
@@ -91,6 +92,20 @@ public class HelloController {
             throw new IllegalArgumentException("Invalid argument provided");
         }
         return ResponseEntity.ok("This will never be reached");
+    }
+
+    @Route("/401")
+    @ResponseStatus(401)
+    public String error401() {
+        return "This is an unauthorized access";
+    }
+
+    @Route("/404")
+    public String error404() {
+        if (true) {
+            throw new UserNotFoundException("User not found");
+        }
+        return "This resource was not found";
     }
 
     public record UserRequest(String name, int age) {}

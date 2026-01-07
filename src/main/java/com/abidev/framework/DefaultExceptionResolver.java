@@ -1,5 +1,7 @@
 package com.abidev.framework;
 
+import com.abidev.annotations.ResponseStatus;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -17,13 +19,27 @@ public class DefaultExceptionResolver {
     }
 
     public static int resolveStatus(Exception ex) {
+
+        // 1️⃣ @ResponseStatus en la excepción o superclases
+        Class<?> clazz = ex.getClass();
+        while (clazz != null && clazz != Object.class) {
+
+            ResponseStatus rs = clazz.getAnnotation(ResponseStatus.class);
+            if (rs != null) {
+                return rs.value();
+            }
+
+            clazz = clazz.getSuperclass();
+        }
+
+        // 2️⃣ Mapeo por tipo (ordenado)
         for (var entry : mappings.entrySet()) {
             if (entry.getKey().isAssignableFrom(ex.getClass())) {
                 return entry.getValue();
             }
         }
 
+        // 3️⃣ Fallback final
         return 500;
     }
-
 }

@@ -1,5 +1,7 @@
 package com.abidev.helpers;
 import com.abidev.annotations.*;
+import com.abidev.annotations.validation.Valid;
+import com.abidev.framework.validations.ValidatorEngine;
 import com.abidev.http.HandlerResult;
 import com.abidev.http.QueryParamsUtils;
 import com.abidev.http.ResponseEntity;
@@ -211,7 +213,13 @@ public class RouteHandler {
                         );
                     }
 
-                    args[i] = BodyConverter.convert(body, paramType);
+                    Object obj = BodyConverter.convert(body, paramType);
+
+                    if (hasAnnotation(paramAnnotations[i], Valid.class)) {
+                        ValidatorEngine.validate(obj);
+                    }
+
+                    args[i] = obj;
                     resolved = true;
                     break;
                 }
@@ -284,7 +292,6 @@ public class RouteHandler {
     }
 
 
-
     private Object convert(String value, Class<?> targetType) {
 
         if (value == null) {
@@ -305,6 +312,13 @@ public class RouteHandler {
         }
 
         throw new RuntimeException("Unsupported parameter type: " + targetType.getName());
+    }
+
+    private boolean hasAnnotation(Annotation[] annotations, Class<?> type) {
+        for (Annotation a : annotations) {
+            if (a.annotationType() == type) return true;
+        }
+        return false;
     }
 
 }

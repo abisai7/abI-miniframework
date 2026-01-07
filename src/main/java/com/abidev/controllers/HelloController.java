@@ -1,6 +1,9 @@
 package com.abidev.controllers;
 
 import com.abidev.annotations.*;
+import com.abidev.annotations.validation.NotNull;
+import com.abidev.annotations.validation.Size;
+import com.abidev.annotations.validation.Valid;
 import com.abidev.controllers.exception.UserNotFoundException;
 import com.abidev.http.ResponseEntity;
 import com.abidev.services.MessageService;
@@ -38,7 +41,7 @@ public class HelloController {
     }
 
     @Route("/user/create")
-    public ResponseEntity<UserResponse> create(@RequestBody UserRequest body){
+    public ResponseEntity<UserResponse> create(@RequestBody @Valid UserRequest body){
         UserResponse response = new UserResponse(
                 "success",
                 "User created successfully",
@@ -108,7 +111,7 @@ public class HelloController {
         return "This resource was not found";
     }
 
-    public record UserRequest(String name, int age) {}
+    public record UserRequest(@NotNull @Size(min = 1, max = 5) String name, int age) {}
 
     public record UserResponse(String status, String message, UserRequest user) {}
 }

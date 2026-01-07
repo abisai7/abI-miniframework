@@ -1,6 +1,9 @@
 package com.abidev.framework;
 
 import com.abidev.annotations.*;
+import com.abidev.annotations.validation.Constraint;
+import com.abidev.framework.validations.ConstraintValidator;
+import com.abidev.framework.validations.ValidatorRegistry;
 import com.abidev.helpers.RouteHandler;
 import com.abidev.http.HandlerResult;
 import com.abidev.http.ResponseEntity;
@@ -61,6 +64,7 @@ public class AbiFramework {
         System.out.println("\tRegistered routes: " + routes.size());
         System.out.println("\tRegistered interceptors: " + interceptors.size());
         System.out.println("\tRegistered exception handlers: " + exceptionHandlers.size());
+        System.out.println("\tRegistered validators: " + ValidatorRegistry.all().size());
         System.out.println("============================================================\n\n");
     }
 
@@ -98,6 +102,30 @@ public class AbiFramework {
                                     instance, method, List.of(eh.value()))
                             );
                         }
+                    }
+                }
+
+                // Register validators
+                if (
+                        clazz.isAnnotationPresent(Constraint.class)
+                                && ConstraintValidator.class.isAssignableFrom(clazz)
+                ) {
+                    try {
+                        ConstraintValidator<?> validator =
+                                (ConstraintValidator<?>) clazz
+                                        .getDeclaredConstructor()
+                                        .newInstance();
+
+                        ValidatorRegistry.register(validator);
+
+                        System.out.println(
+                                "✔ Validator registered: " + clazz.getSimpleName()
+                        );
+
+                    } catch (Exception e) {
+                        throw new RuntimeException(
+                                "Failed to register validator " + clazz.getName(), e
+                        );
                     }
                 }
 
